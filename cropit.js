@@ -1,6 +1,6 @@
 (function ($) {
   $(document).ready(function(){
-    console.log('cropit.js');
+    // @todo: move this out of js file! was easiest way to get working initially
     var extra_markup = '<div class="cropit-saved-image"></div><div class="cropit-cropper-container"><div class="cropit-image-preview"></div>'
     + '<div class="image-size-label">'
         + '  Resize image'

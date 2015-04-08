@@ -1,5 +1,17 @@
 <?php
 
+/*
+
+  @todos:
+
+  @todo move markup out of js into theme functions
+  @todo multiple value fields / multiple fields on page (jquery currently just targeting classes)
+  @todo file destination path from field settings
+  @todo default global path?
+  @todo tidy image preview, make workflow clearer (must 'save' to add image)
+
+*/
+
 function cropit_menu(){
 
 /*
@@ -55,7 +67,6 @@ function cropit_save_file_from_datauri(){
 
   $files_path = file_directory_temp();
 
-  // @todo - proper file name
   $filename = $_POST['filename'];
 
   // @todo - paths in field settings?
@@ -111,8 +122,6 @@ function cropit_field_widget_info() {
 
 
 function cropit_field_widget_form(&$form, &$form_state, $field, $instance, $langcode, $items, $delta, $element) {
-
-  drupal_set_message(print_r($instance,true));
 
   drupal_add_js(array('cropit' => array(
     'width' => $instance['widget']['settings']['crop_width'],
@@ -335,9 +344,6 @@ function cropit_file_value(&$element, $input = FALSE, $form_state = NULL) {
  */
 function cropit_field_widget_process($element, &$form_state, $form) {
 
-  //drupal_set_message(print_r($element,true));
-
-  //unset($element['upload']);
   unset($element['upload_button']);
   unset($element['remove_button']);
 
@@ -486,7 +492,7 @@ function theme_cropit_field_widget($variables) {
   if ($element['fid']['#value'] != 0) {
     $element['filename']['#markup'] .= ' <span class="file-size">(' . format_size($element['#file']->filesize) . ')</span> ';
   }
-  //drupal_set_message(print_r($element,true));
+
   $output .= drupal_render_children($element);
   $output .= '</div>';
   $output .= '</div>';
@@ -494,33 +500,12 @@ function theme_cropit_field_widget($variables) {
   return $output;
 
 
-
-  //drupal_set_message('theme_cropit_field_widget');
-  //drupal_set_message(print_r($variables,true));
-
-  $element = $variables['element'];
-  $output = '';
-
-  //drupal_set_message(print_r($element,true));
-
-  // The "form-managed-file" class is required for proper Ajax functionality.
-  $output .= '<div class="file-widget form-managed-file cropit-image-file clearfix">';
-  if ($element['fid']['#value'] != 0) {
-    // Add the file size after the file name.
-    $element['filename']['#markup'] .= ' <span class="file-size">(' . format_size($element['#file']->filesize) . ')</span> ';
-  }
-  print_r($element);
-  $output .= drupal_render_children($element);
- $output .= 'ANDYYY<div class="cropit-image-preview"></div>
+ $output .= '<div class="cropit-image-preview"></div>
  <div class="image-size-label">Resize image</div>
  <input type="range" class="cropit-image-zoom-input">
  <input type="hidden" name="image-data" class="hidden-image-data" />
  <div id="cropclick">click</div>';
 
-
-  $output .= '</div>';
-
-  return $output;
 }
 
 /**
