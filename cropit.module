@@ -19,8 +19,18 @@ function cropit_menu(){
   $items['cropit/save_image'] = array(
 
       'title' => 'Cropit',
-      'description' => 'Configuration for Cropit module',
+      'description' => '',
       'page callback' => 'cropit_save_file_from_datauri',
+      'access arguments' => array('access content'),
+      'type' => MENU_NORMAL_ITEM,
+
+    );
+  $items['cropit/preview_image/%'] = array(
+
+      'title' => 'Cropit',
+      'description' => 'Configuration for Cropit module',
+      'page callback' => 'cropit_preview_image',
+      'page arguments' => array(2),
       'access arguments' => array('access content'),
       'type' => MENU_NORMAL_ITEM,
 
@@ -46,7 +56,7 @@ function cropit_save_file_from_datauri(){
   $files_path = file_directory_temp();
 
   // @todo - proper file name
-  $filename = 'test2.jpg';
+  $filename = $_POST['filename'];
 
   // @todo - paths in field settings?
   // @todo - global path in module settings?
@@ -68,12 +78,28 @@ function cropit_save_file_from_datauri(){
 
 }
 
+function cropit_preview_image($fid){
+
+  if(!is_numeric($fid)) die();
+
+  $file = file_load($fid);
+
+  print(file_create_url($file->uri));
+
+  die();
+
+}
+
 function cropit_field_widget_info() {
   return array(
     'image_cropit' => array(
       'label' => t('Cropit'),
       'field types' => array('image'),
-      'settings' => array(),
+      'settings' => array(
+        'preview_image_style' => 'thumbnail',
+        'crop_width' => '300',
+        'crop_height' => '150',
+        ),
       'behaviors' => array(
         'multiple values' => FIELD_BEHAVIOR_DEFAULT,
         'default value' => FIELD_BEHAVIOR_DEFAULT,
@@ -85,6 +111,19 @@ function cropit_field_widget_info() {
 
 
 function cropit_field_widget_form(&$form, &$form_state, $field, $instance, $langcode, $items, $delta, $element) {
+
+  drupal_set_message(print_r($instance,true));
+
+  drupal_add_js(array('cropit' => array(
+    'width' => $instance['widget']['settings']['crop_width'],
+    'height' => $instance['widget']['settings']['crop_height'],
+  )
+  ), 'setting');
+
+
+  drupal_add_js('/sites/all/libraries/cropit/dist/jquery.cropit.min.js');
+  drupal_add_css(drupal_get_path('module','cropit') . '/cropit.css');
+  drupal_add_js(drupal_get_path('module','cropit') . '/cropit.js'); 
   
   $defaults = array(
     'fid' => 0,
@@ -114,7 +153,6 @@ function cropit_field_widget_form(&$form, &$form_state, $field, $instance, $lang
     
   );
 
-  //drupal_set_message(print_r($
 
   if ($field['cardinality'] == 1) {
     // Set the default value.
@@ -165,6 +203,45 @@ function cropit_field_widget_form(&$form, &$form_state, $field, $instance, $lang
 
   return $element;
 
+}
+
+
+/**
+ * Implements hook_field_widget_settings_form().
+ */
+function cropit_field_widget_settings_form($field, $instance) {
+  $widget = $instance['widget'];
+  $settings = $widget['settings'];
+
+  // Use the file widget settings form.
+  $form = file_field_widget_settings_form($field, $instance);
+
+  $form['preview_image_style'] = array(
+    '#title' => t('Preview image style'),
+    '#type' => 'select',
+    '#options' => image_style_options(FALSE, PASS_THROUGH),
+    '#empty_option' => '<' . t('no preview') . '>',
+    '#default_value' => $settings['preview_image_style'],
+    '#description' => t('The preview image will be shown while editing the content.'),
+    '#weight' => 15,
+  );
+
+  $form['crop_width'] = array(
+    '#title' => t('Crop area width (px)'),
+    '#type' => 'textfield',
+    '#default_value' => $settings['crop_width'],
+    '#description' => t('Width in pixels of the cropping area (and resulting image)'),
+    '#weight' => 16,
+  );
+  $form['crop_height'] = array(
+    '#title' => t('Crop area height (px)'),
+    '#type' => 'textfield',
+    '#default_value' => $settings['crop_height'],
+    '#description' => t('Height in pixels of the cropping area (and resulting image)'),
+    '#weight' => 17,
+  );
+
+  return $form;
 }
 
 
@@ -327,26 +404,7 @@ function cropit_field_widget_process($element, &$form_state, $form) {
     $element[$key]['#limit_validation_errors'] = array(array_slice($element['#parents'], 0, -1));
   }
 
-  return $element;
-}
-
-
-/**
- * An element #process callback for the image_image field type.
- *
- * Expands the image_image type to include the alt and title fields.
- */
-function cropit_field_widget_process_2($element, &$form_state, $form) {
-  $item = $element['#value'];
-  $item['fid'] = $element['fid']['#value'];
-
-  $instance = field_widget_instance($element, $form_state);
-
-  $settings = $instance['settings'];
-  $widget_settings = $instance['widget']['settings'];
-
-  $element['#theme'] = 'image_widget';
-  $element['#attached']['css'][] = drupal_get_path('module', 'image') . '/image.css';
+  $widget_settings['preview_image_style'] = 'thumbnail';
 
   // Add the image preview.
   if ($element['#file'] && $widget_settings['preview_image_style']) {
@@ -387,43 +445,11 @@ function cropit_field_widget_process_2($element, &$form_state, $form) {
       '#type' => 'hidden',
       '#value' => $variables['height'],
     );
-  }
-
-  // Add the additional alt and title fields.
-  $element['alt'] = array(
-    '#title' => t('Alternate text'),
-    '#type' => 'textfield',
-    '#default_value' => isset($item['alt']) ? $item['alt'] : '',
-    '#description' => t('This text will be used by screen readers, search engines, or when the image cannot be loaded.'),
-    // @see http://www.gawds.org/show.php?contentid=28
-    '#maxlength' => 512,
-    '#weight' => -2,
-    '#access' => (bool) $item['fid'] && $settings['alt_field'],
-  );
-  $element['title'] = array(
-    '#type' => 'textfield',
-    '#title' => t('Title'),
-    '#default_value' => isset($item['title']) ? $item['title'] : '',
-    '#description' => t('The title is used as a tool tip when the user hovers the mouse over the image.'),
-    '#maxlength' => 1024,
-    '#weight' => -1,
-    '#access' => (bool) $item['fid'] && $settings['title_field'],
-  );
+  }  
 
   return $element;
 }
 
-function cropit_field_widget_form_alter(&$element, &$form_state, $context){
-
-  //drupal_set_message(print_r($element,true));
-  drupal_add_js('/sites/all/libraries/cropit/dist/jquery.cropit.min.js');
-
-
-  drupal_add_css(drupal_get_path('module','cropit') . '/cropit.css');
-
-  drupal_add_js(drupal_get_path('module','cropit') . '/cropit.js');
-
-}
 
 
 //// theme
