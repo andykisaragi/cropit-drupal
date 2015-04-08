@@ -20,6 +20,16 @@
 			});
 			console.log('exported: ' + exported);
 
+			$.post( "/cropit/save_image", { data_uri: exported } ).done(function( data ) {
+				alert( "Data Loaded: " + data );
+			});
+
+			/*$.ajax({
+			  url: "/cropit/save_image?data_uri=" + exported,
+			}).done(function(data) {
+			  $( '#cropclick' ).append( "...done " + data );
+			});*/
+
 		});
 	});
 })(jQuery);
