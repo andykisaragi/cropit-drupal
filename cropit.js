@@ -1,6 +1,6 @@
 (function ($) {
 	$(document).ready(function(){
-		//console.log('cropit.js');
+		console.log('cropit.js');
 		var extra_markup = '<div class="cropit-image-preview"></div>'
 		+ '<div class="image-size-label">'
         + '  Resize image'
@@ -8,13 +8,13 @@
         + '<input type="range" class="cropit-image-zoom-input">'
         + '<input type="hidden" name="image-data" class="hidden-image-data" />'
         + '<div id="cropclick">click</div>';
-		$('.image-widget-data').append(extra_markup);
-		$('.image-widget-data input').addClass('cropit-image-input');
-		$('.image-widget-data').cropit();
+		$('.field-widget-image-cropit').append(extra_markup);
+		$('.field-widget-image-cropit input.form-file').addClass('cropit-image-input');
+		$('.field-widget-image-cropit').cropit();
 
 		$('#cropclick').click(function(){
 			console.log('cropclick');
-			var exported = $('.image-widget-data').cropit('export', {
+			var exported = $('.field-widget-image-cropit').cropit('export', {
 			  type: 'image/jpeg',
 			  quality: .9,
 			});

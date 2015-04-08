@@ -33,7 +33,9 @@ function cropit_menu(){
 
 function cropit_save_file_from_datauri(){
 
-// SECURITY!!!!!
+  // @todo: SECURITY!!!!!
+  // could make the var name a hash of time perhaps?
+  // hm but it would be visible in the js
   $encodedData = $_POST['data_uri'];
 
   $encodedData = substr($encodedData,strpos($encodedData,",")+1);
@@ -41,17 +43,25 @@ function cropit_save_file_from_datauri(){
   $encodedData = str_replace(' ','+',$encodedData);
   $decodedData = base64_decode($encodedData);
 
-  $files_path = variable_get('file_public_path', conf_path() . '/files');
+  $files_path = file_directory_temp();
 
-  $img_path = $files_path . '/test2.jpg';
+  // @todo - proper file name
+  $filename = 'test2.jpg';
 
+  // @todo - paths in field settings?
+  // @todo - global path in module settings?
+  $img_path = $files_path . '/' . $filename;
+  
   $bytes = file_put_contents($img_path, $decodedData);
 
-  if($bytes){
-    print '<img src="' . $img_path . '" />' . $img_path;
+  $handle = fopen($img_path, 'r');
+  $file = file_save_data($handle, 'public://' . $filename);
+  fclose($handle);
 
+  if($bytes && $file){
+    print $file->fid;
   }else{
-    print 'faiiiil';
+    print '0';
   }
 
   die();
@@ -72,13 +82,249 @@ function cropit_field_widget_info() {
   );
 }
 
+
+
 function cropit_field_widget_form(&$form, &$form_state, $field, $instance, $langcode, $items, $delta, $element) {
-  drupal_set_message($instance['widget']['type']);
-  $element += array(
-    '#type' => $instance['widget']['type'],
-    '#default_value' => isset($items[$delta]) ? $items[$delta] : '',
+  
+  $defaults = array(
+    'fid' => 0,
+    'display' => !empty($field['settings']['display_default']),
+    'description' => '',
   );
-  return array('value' => $element);
+
+  $element_info = element_info('managed_file');
+
+  $element += array(
+    
+    //'#name' => 'files[' . implode('_', $element['#parents']) . ']',
+    '#type' => 'file',
+    //'#title' => t('Choose a file'),
+    //'#title_display' => 'invisible',
+    '#size' => 22,
+    //'#theme_wrappers' => array('cropit_field_widget'),
+    //'#theme' => 'cropit_field_widget',
+    '#weight' => -10,
+    '#attributes' => array(
+      'class' => array('cropit-image-input')
+    ),
+    '#value_callback' => 'file_field_widget_value',
+    // Allows this field to return an array instead of a single value.
+    '#extended' => TRUE,
+    '#process' => array_merge($element_info['#process'], array('cropit_field_widget_process')),
+    
+  );
+
+  if ($field['cardinality'] == 1) {
+    // Set the default value.
+    $element['#default_value'] = !empty($items) ? $items[0] : $defaults;
+    // If there's only one field, return it as delta 0.
+    if (empty($element['#default_value']['fid'])) {
+      $element['#description'] = theme('file_upload_help', array(
+        'description' => $element['#description'], 
+        'upload_validators' => $element['#upload_validators']
+      ));
+    }
+    $elements = array($element);
+  }
+  else {
+    // If there are multiple values, add an element for each existing one.
+    foreach ($items as $item) {
+      $elements[$delta] = $element;
+      $elements[$delta]['#default_value'] = $item;
+      $elements[$delta]['#weight'] = $delta;
+      $delta++;
+    }
+    // And then add one more empty row for new uploads except when this is a
+    // programmed form as it is not necessary.
+    if (($field['cardinality'] == FIELD_CARDINALITY_UNLIMITED || $delta < $field['cardinality']) && empty($form_state['programmed'])) {
+      $elements[$delta] = $element;
+      $elements[$delta]['#default_value'] = $defaults;
+      $elements[$delta]['#weight'] = $delta;
+      $elements[$delta]['#required'] = ($element['#required'] && $delta == 0);
+    }
+    // The group of elements all-together need some extra functionality
+    // after building up the full list (like draggable table rows).
+    $elements['#file_upload_delta'] = $delta;
+    $elements['#theme'] = 'file_widget_multiple';
+    $elements['#theme_wrappers'] = array('fieldset');
+    $elements['#process'] = array('file_field_widget_process_multiple');
+    $elements['#title'] = $element['#title'];
+    $elements['#description'] = $element['#description'];
+    $elements['#field_name'] = $element['#field_name'];
+    $elements['#language'] = $element['#language'];
+    $elements['#display_field'] = $field['settings']['display_field'];
+
+    // Add some properties that will eventually be added to the file upload
+    // field. These are added here so that they may be referenced easily through
+    // a hook_form_alter().
+    $elements['#file_upload_title'] = t('Add a new file');
+    $elements['#file_upload_description'] = theme('file_upload_help', array('description' => '', 'upload_validators' => $elements[0]['#upload_validators']));
+  }
+
+  return $elements;
+
+}
+
+/**
+ * An element #process callback for the file_generic field type.
+ *
+ * Expands the file_generic type to include the description and display fields.
+ */
+function cropit_field_widget_process($element, &$form_state, $form) {
+
+  drupal_set_message(print_r($element,true));
+
+  //unset($element['upload']);
+  unset($element['upload_button']);
+  unset($element['remove_button']);
+
+  $element['fid']['#attributes']['class'] = array('cropit-fid');
+
+  $item = $element['#value'];
+  $item['fid'] = $element['fid']['#value'];
+
+  $field = field_widget_field($element, $form_state);
+  $instance = field_widget_instance($element, $form_state);
+  $settings = $instance['widget']['settings'];
+
+  $element['#theme'] = 'cropit_field_widget';
+
+  // Add the display field if enabled.
+  if (!empty($field['settings']['display_field']) && $item['fid']) {
+    $element['display'] = array(
+      '#type' => empty($item['fid']) ? 'hidden' : 'checkbox',
+      '#title' => t('Include file in display'),
+      '#value' => isset($item['display']) ? $item['display'] : $field['settings']['display_default'],
+      '#attributes' => array('class' => array('file-display')),
+    );
+  }
+  else {
+    $element['display'] = array(
+      '#type' => 'hidden',
+      '#value' => '1',
+    );
+  }
+
+  // Add the description field if enabled.
+  if (!empty($instance['settings']['description_field']) && $item['fid']) {
+    $element['description'] = array(
+      '#type' => variable_get('file_description_type', 'textfield'),
+      '#title' => t('Description'),
+      '#value' => isset($item['description']) ? $item['description'] : '',
+      '#maxlength' => variable_get('file_description_length', 128),
+      '#description' => t('The description may be used as the label of the link to the file.'),
+    );
+  }
+
+  // Adjust the Ajax settings so that on upload and remove of any individual
+  // file, the entire group of file fields is updated together.
+  if ($field['cardinality'] != 1) {
+    $parents = array_slice($element['#array_parents'], 0, -1);
+    $new_path = 'file/ajax/' . implode('/', $parents) . '/' . $form['form_build_id']['#value'];
+    $field_element = drupal_array_get_nested_value($form, $parents);
+    $new_wrapper = $field_element['#id'] . '-ajax-wrapper';
+    foreach (element_children($element) as $key) {
+      if (isset($element[$key]['#ajax'])) {
+        $element[$key]['#ajax']['path'] = $new_path;
+        $element[$key]['#ajax']['wrapper'] = $new_wrapper;
+      }
+    }
+    unset($element['#prefix'], $element['#suffix']);
+  }
+
+  // Add another submit handler to the upload and remove buttons, to implement
+  // functionality needed by the field widget. This submit handler, along with
+  // the rebuild logic in file_field_widget_form() requires the entire field,
+  // not just the individual item, to be valid.
+  foreach (array('upload_button', 'remove_button') as $key) {
+    $element[$key]['#submit'][] = 'file_field_widget_submit';
+    $element[$key]['#limit_validation_errors'] = array(array_slice($element['#parents'], 0, -1));
+  }
+
+  return $element;
+}
+
+
+/**
+ * An element #process callback for the image_image field type.
+ *
+ * Expands the image_image type to include the alt and title fields.
+ */
+function cropit_field_widget_process_2($element, &$form_state, $form) {
+  $item = $element['#value'];
+  $item['fid'] = $element['fid']['#value'];
+
+  $instance = field_widget_instance($element, $form_state);
+
+  $settings = $instance['settings'];
+  $widget_settings = $instance['widget']['settings'];
+
+  $element['#theme'] = 'image_widget';
+  $element['#attached']['css'][] = drupal_get_path('module', 'image') . '/image.css';
+
+  // Add the image preview.
+  if ($element['#file'] && $widget_settings['preview_image_style']) {
+    $variables = array(
+      'style_name' => $widget_settings['preview_image_style'],
+      'path' => $element['#file']->uri,
+    );
+
+    // Determine image dimensions.
+    if (isset($element['#value']['width']) && isset($element['#value']['height'])) {
+      $variables['width'] = $element['#value']['width'];
+      $variables['height'] = $element['#value']['height'];
+    }
+    else {
+      $info = image_get_info($element['#file']->uri);
+
+      if (is_array($info)) {
+        $variables['width'] = $info['width'];
+        $variables['height'] = $info['height'];
+      }
+      else {
+        $variables['width'] = $variables['height'] = NULL;
+      }
+    }
+
+    $element['preview'] = array(
+      '#type' => 'markup',
+      '#markup' => theme('image_style', $variables),
+    );
+
+    // Store the dimensions in the form so the file doesn't have to be accessed
+    // again. This is important for remote files.
+    $element['width'] = array(
+      '#type' => 'hidden',
+      '#value' => $variables['width'],
+    );
+    $element['height'] = array(
+      '#type' => 'hidden',
+      '#value' => $variables['height'],
+    );
+  }
+
+  // Add the additional alt and title fields.
+  $element['alt'] = array(
+    '#title' => t('Alternate text'),
+    '#type' => 'textfield',
+    '#default_value' => isset($item['alt']) ? $item['alt'] : '',
+    '#description' => t('This text will be used by screen readers, search engines, or when the image cannot be loaded.'),
+    // @see http://www.gawds.org/show.php?contentid=28
+    '#maxlength' => 512,
+    '#weight' => -2,
+    '#access' => (bool) $item['fid'] && $settings['alt_field'],
+  );
+  $element['title'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Title'),
+    '#default_value' => isset($item['title']) ? $item['title'] : '',
+    '#description' => t('The title is used as a tool tip when the user hovers the mouse over the image.'),
+    '#maxlength' => 1024,
+    '#weight' => -1,
+    '#access' => (bool) $item['fid'] && $settings['title_field'],
+  );
+
+  return $element;
 }
 
 function cropit_field_widget_form_alter(&$element, &$form_state, $context){
@@ -91,4 +337,123 @@ function cropit_field_widget_form_alter(&$element, &$form_state, $context){
 
   drupal_add_js(drupal_get_path('module','cropit') . '/cropit.js');
 
+}
+
+
+//// theme
+
+/**
+ * Implements hook_theme().
+ */
+function cropit_theme() {
+  return array(
+
+    'cropit_field_widget' => array(
+      'render element' => 'element',
+    ),
+    'cropit_upload_help' => array(
+      'variables' => array('description' => NULL, 'upload_validators' => NULL),
+    ),
+
+  );
+}
+
+function theme_cropit_field_widget($variables) {
+
+  $element = $variables['element'];
+  $output = '';
+  $output .= '<div class="image-widget form-managed-file clearfix">';
+
+  if (isset($element['preview'])) {
+    $output .= '<div class="image-preview">';
+    $output .= drupal_render($element['preview']);
+    $output .= '</div>';
+  }
+
+  $output .= '<div class="image-widget-data">';
+  if ($element['fid']['#value'] != 0) {
+    $element['filename']['#markup'] .= ' <span class="file-size">(' . format_size($element['#file']->filesize) . ')</span> ';
+  }
+  //drupal_set_message(print_r($element,true));
+  $output .= drupal_render_children($element);
+  $output .= '</div>';
+  $output .= '</div>';
+
+  return $output;
+
+
+
+  //drupal_set_message('theme_cropit_field_widget');
+  //drupal_set_message(print_r($variables,true));
+
+  $element = $variables['element'];
+  $output = '';
+
+  //drupal_set_message(print_r($element,true));
+
+  // The "form-managed-file" class is required for proper Ajax functionality.
+  $output .= '<div class="file-widget form-managed-file cropit-image-file clearfix">';
+  if ($element['fid']['#value'] != 0) {
+    // Add the file size after the file name.
+    $element['filename']['#markup'] .= ' <span class="file-size">(' . format_size($element['#file']->filesize) . ')</span> ';
+  }
+  print_r($element);
+  $output .= drupal_render_children($element);
+ $output .= 'ANDYYY<div class="cropit-image-preview"></div>
+ <div class="image-size-label">Resize image</div>
+ <input type="range" class="cropit-image-zoom-input">
+ <input type="hidden" name="image-data" class="hidden-image-data" />
+ <div id="cropclick">click</div>';
+
+
+  $output .= '</div>';
+
+  return $output;
+}
+
+/**
+ * Returns HTML for help text based on file upload validators.
+ *
+ * @param $variables
+ *   An associative array containing:
+ *   - description: The normal description for this field, specified by the
+ *     user.
+ *   - upload_validators: An array of upload validators as used in
+ *     $element['#upload_validators'].
+ *
+ * @ingroup themeable
+ */
+function theme_cropit_upload_help($variables) {
+  $description = $variables['description'];
+  $upload_validators = $variables['upload_validators'];
+
+  $descriptions = array();
+
+  if (strlen($description)) {
+    $descriptions[] = $description;
+  }
+  if (isset($upload_validators['file_validate_size'])) {
+    $descriptions[] = t('Files must be less than !size.', array('!size' => '<strong>' . format_size($upload_validators['file_validate_size'][0]) . '</strong>'));
+  }
+  if (isset($upload_validators['file_validate_extensions'])) {
+    $descriptions[] = t('Allowed file types: !extensions.', array('!extensions' => '<strong>' . check_plain($upload_validators['file_validate_extensions'][0]) . '</strong>'));
+  }
+  if (isset($upload_validators['file_validate_image_resolution'])) {
+    $max = $upload_validators['file_validate_image_resolution'][0];
+    $min = $upload_validators['file_validate_image_resolution'][1];
+    if ($min && $max && $min == $max) {
+      $descriptions[] = t('Images must be exactly !size pixels.', array('!size' => '<strong>' . $max . '</strong>'));
+    }
+    elseif ($min && $max) {
+      $descriptions[] = t('Images must be between !min and !max pixels.', array('!min' => '<strong>' . $min . '</strong>', '!max' => '<strong>' . $max . '</strong>'));
+    }
+    elseif ($min) {
+      $descriptions[] = t('Images must be larger than !min pixels.', array('!min' => '<strong>' . $min . '</strong>'));
+    }
+    elseif ($max) {
+      $descriptions[] = t('Images must be smaller than !max pixels.', array('!max' => '<strong>' . $max . '</strong>'));
+    }
+  }
+
+  return implode('<br />', $descriptions);
 }
