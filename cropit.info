@@ -1,0 +1,4 @@
+name = cropit
+description = Provides a widget for core image field using the cropit jquery plugin
+core = 7.x
+version = 1.0
