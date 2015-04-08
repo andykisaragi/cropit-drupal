@@ -13,22 +13,16 @@
 		$('.field-widget-image-cropit').cropit();
 
 		$('#cropclick').click(function(){
-			console.log('cropclick');
+			
 			var exported = $('.field-widget-image-cropit').cropit('export', {
 			  type: 'image/jpeg',
 			  quality: .9,
 			});
-			console.log('exported: ' + exported);
-
+			
 			$.post( "/cropit/save_image", { data_uri: exported } ).done(function( data ) {
-				alert( "Data Loaded: " + data );
+				//alert( "Data Loaded: " + data );
+				$('.cropit-fid').val(data);
 			});
-
-			/*$.ajax({
-			  url: "/cropit/save_image?data_uri=" + exported,
-			}).done(function(data) {
-			  $( '#cropclick' ).append( "...done " + data );
-			});*/
 
 		});
 	});

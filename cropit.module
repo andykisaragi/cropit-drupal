@@ -107,7 +107,7 @@ function cropit_field_widget_form(&$form, &$form_state, $field, $instance, $lang
     '#attributes' => array(
       'class' => array('cropit-image-input')
     ),
-    '#value_callback' => 'file_field_widget_value',
+    '#value_callback' => 'file_managed_file_value',
     // Allows this field to return an array instead of a single value.
     '#extended' => TRUE,
     '#process' => array_merge($element_info['#process'], array('cropit_field_widget_process')),
@@ -161,7 +161,7 @@ function cropit_field_widget_form(&$form, &$form_state, $field, $instance, $lang
     $elements['#file_upload_description'] = theme('file_upload_help', array('description' => '', 'upload_validators' => $elements[0]['#upload_validators']));
   }
 
-  return $elements;
+  return $element;
 
 }
 
@@ -172,7 +172,7 @@ function cropit_field_widget_form(&$form, &$form_state, $field, $instance, $lang
  */
 function cropit_field_widget_process($element, &$form_state, $form) {
 
-  drupal_set_message(print_r($element,true));
+  //drupal_set_message(print_r($element,true));
 
   //unset($element['upload']);
   unset($element['upload_button']);
