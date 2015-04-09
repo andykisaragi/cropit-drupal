@@ -8,6 +8,7 @@
   @todo multiple value fields / multiple fields on page (jquery currently just targeting classes)
   @todo file destination path from field settings
   @todo default global path?
+  @todo default crop dimensions 
   @todo tidy image preview, make workflow clearer (must 'save' to add image)
 
 */
@@ -28,6 +29,16 @@ function cropit_menu(){
       'type' => MENU_DEFAULT_LOCAL_TASK,
     );*/
 
+  $items['cropit/popup/%/%/%'] = array(
+
+      'title' => 'Cropit',
+      'description' => '',
+      'page callback' => 'cropit_standalone_page',
+      'access arguments' => array('use cropit'),
+      'type' => MENU_NORMAL_ITEM,
+
+    );
+
   $items['cropit/save_image'] = array(
 
       'title' => 'Cropit',
@@ -37,6 +48,7 @@ function cropit_menu(){
       'type' => MENU_NORMAL_ITEM,
 
     );
+
   $items['cropit/preview_image/%'] = array(
 
       'title' => 'Cropit',
@@ -48,9 +60,21 @@ function cropit_menu(){
 
     );
 
-
   return $items;
 
+}
+
+function cropit_permission() {
+  return array(
+    'administer cropit' => array(
+      'title' => t('Administer Cropit'),
+      'description' => t('Change settings for cropit module.'),
+    ),
+    'use cropit' => array(
+      'title' => t('Use Cropit'),
+      'description' => t('Use the cropit widget'),
+    ),
+  );
 }
 
 function cropit_save_file_from_datauri(){
@@ -101,6 +125,12 @@ function cropit_preview_image($fid){
 
 }
 
+function cropit_standalone_page($entity_type, $entity_id, $field_name){
+
+  // good idea?
+
+}
+
 function cropit_field_widget_info() {
   return array(
     'image_cropit' => array(
@@ -118,8 +148,6 @@ function cropit_field_widget_info() {
     ),
   );
 }
-
-
 
 function cropit_field_widget_form(&$form, &$form_state, $field, $instance, $langcode, $items, $delta, $element) {
 
@@ -152,9 +180,7 @@ function cropit_field_widget_form(&$form, &$form_state, $field, $instance, $lang
     //'#theme_wrappers' => array('cropit_field_widget'),
     //'#theme' => 'cropit_field_widget',
     '#weight' => -10,
-    '#attributes' => array(
-      'class' => array('cropit-image-input')
-    ),
+
     '#value_callback' => 'cropit_file_value',
     // Allows this field to return an array instead of a single value.
     '#extended' => TRUE,
@@ -162,6 +188,7 @@ function cropit_field_widget_form(&$form, &$form_state, $field, $instance, $lang
     
   );
 
+  //$element['#attributes']['class'][] = 'cropit-image-input';
 
   if ($field['cardinality'] == 1) {
     // Set the default value.
@@ -495,6 +522,18 @@ function theme_cropit_field_widget($variables) {
 
   $output .= drupal_render_children($element);
   $output .= '</div>';
+
+  $output .= '<div class="cropit-saved-image"></div><div class="cropit-cropper-container"><div class="cropit-image-preview"></div>'
+  . '<div class="image-size-label">'
+  . '  Resize image'
+  . '</div>'
+  . '<input type="range" class="cropit-image-zoom-input">'
+  . '<input type="hidden" name="image-data" class="hidden-image-data" />'
+  . '<div class="cropit-save"><input type="button" class="cropit-save-btn" value="Save" /></div></div>';
+
+
+
+
   $output .= '</div>';
 
   return $output;
