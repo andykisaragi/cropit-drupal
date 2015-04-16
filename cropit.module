@@ -10,13 +10,14 @@
   @todo default global path?
   @todo default crop dimensions 
   @todo tidy image preview, make workflow clearer (must 'save' to add image)
+  @todo update image preview on save
 
 */
 
 function cropit_menu(){
 
-/*
-  $items['admin/config/cropit'] = array(
+
+  $items['admin/config/media/cropit'] = array(
       'title' => 'Cropit',
       'description' => 'Configuration for Cropit module',
       'page callback' => 'drupal_get_form',
@@ -24,18 +25,21 @@ function cropit_menu(){
       'access arguments' => array('administer cropit'),
       'type' => MENU_NORMAL_ITEM,
     );
-  $items['admin/config/cropit/settings'] = array(
+
+  $items['admin/config/media/cropit/settings'] = array(
       'title' => 'Cropit settings',
       'type' => MENU_DEFAULT_LOCAL_TASK,
-    );*/
+    );
 
   $items['cropit/popup/%/%/%'] = array(
 
       'title' => 'Cropit',
       'description' => '',
-      'page callback' => 'cropit_standalone_page',
+      'page callback' => 'drupal_get_form',
+      'page arguments' => array('cropit_popup_form',2,3,4),
       'access arguments' => array('use cropit'),
       'type' => MENU_NORMAL_ITEM,
+      'file' => 'cropit.popup.inc',
 
     );
 
@@ -64,6 +68,67 @@ function cropit_menu(){
 
 }
 
+function cropit_admin_form($form, &$form_state){
+
+
+
+  /*$form['cropit_js_location'] = array(
+
+    '#type' => 'textfield',
+    '#title' => 'Cropit library location',
+    '#description' => 'Check to replace the browser default "browse" / "choose file" button with more styleable markup',
+    '#default_value' => variable_get('cropit_upload_button_text','Choose a file'),
+
+  );*/
+
+  $form['cropit_step1_title'] = array(
+
+    '#type' => 'textfield',
+    '#title' => 'Step 1 title',
+    '#default_value' => variable_get('cropit_step1_title','Step 1/3 - Choose your image'),
+    );
+  $form['cropit_step2_title'] = array(
+
+    '#type' => 'textfield',
+    '#title' => 'Step 2 title',
+    '#default_value' => variable_get('cropit_step2_title','Step 2/3 - Resize and crop your image'),
+    );
+  $form['cropit_step3_title'] = array(
+
+    '#type' => 'textfield',
+    '#title' => 'Step 3 title',
+    '#default_value' => variable_get('cropit_step3_title','Step 3/3 - Approve your image'),
+    );
+
+  $form['cropit_replace_upload_button'] = array(
+
+    '#type' => 'checkbox',
+    '#title' => 'Replace upload button',
+    '#description' => 'Check to replace the browser default "browse" / "choose file" button with more styleable markup',
+    '#default_value' => variable_get('cropit_replace_upload_button',0),
+
+  );
+
+  $form['cropit_upload_button_text'] = array(
+
+    '#type' => 'textfield',
+    '#title' => 'Upload button text',
+    '#default_value' => variable_get('cropit_upload_button_text','Choose a file'),
+
+  );
+
+  $form['cropit_upload_button_class'] = array(
+
+    '#type' => 'textfield',
+    '#title' => 'Upload button classes',
+    '#default_value' => variable_get('cropit_upload_button_class',''),
+
+  );
+
+  return system_settings_form($form);
+
+}
+
 function cropit_permission() {
   return array(
     'administer cropit' => array(
@@ -78,6 +143,8 @@ function cropit_permission() {
 }
 
 function cropit_save_file_from_datauri(){
+
+  //error_log('cropit_save_file_from_datauri() called');
 
   // @todo: SECURITY!!!!!
   // could make the var name a hash of time perhaps?
@@ -96,19 +163,29 @@ function cropit_save_file_from_datauri(){
   // @todo - paths in field settings?
   // @todo - global path in module settings?
   $img_path = $files_path . '/' . $filename;
-  
+
+  //error_log(print_r($_POST,true));
+
   $bytes = file_put_contents($img_path, $decodedData);
 
-  $handle = fopen($img_path, 'r');
-  $file = file_save_data($handle, 'public://' . $filename);
-  fclose($handle);
+  if($bytes){
+    if($_POST['save_managed'] == 1){
+      $handle = fopen($img_path, 'r');
+      $file = file_save_data($handle, 'public://' . $filename);
+      fclose($handle);
+      if($file){
+        print $file->fid;
+        die();
+      }
+    }else{  
+      print $img_path;
+      die();
+    }
 
-  if($bytes && $file){
-    print $file->fid;
-  }else{
-    print '0';
   }
 
+  print '0';
+  
   die();
 
 }
@@ -128,6 +205,7 @@ function cropit_preview_image($fid){
 function cropit_standalone_page($entity_type, $entity_id, $field_name){
 
   // good idea?
+  return drupal_get_form('cropit_popup_form',$entity_type, $entity_id, $field_name);
 
 }
 
@@ -151,11 +229,14 @@ function cropit_field_widget_info() {
 
 function cropit_field_widget_form(&$form, &$form_state, $field, $instance, $langcode, $items, $delta, $element) {
 
+  //drupal_set_message(print_r(array_keys($form),true));
+
   drupal_add_js(array('cropit' => array(
     'width' => $instance['widget']['settings']['crop_width'],
     'height' => $instance['widget']['settings']['crop_height'],
   )
   ), 'setting');
+
 
 
   drupal_add_js('/sites/all/libraries/cropit/dist/jquery.cropit.min.js');
@@ -172,23 +253,17 @@ function cropit_field_widget_form(&$form, &$form_state, $field, $instance, $lang
 
   $element += array(
     
-    //'#name' => 'files[' . implode('_', $element['#parents']) . ']',
     '#type' => 'file',
-    //'#title' => t('Choose a file'),
-    //'#title_display' => 'invisible',
     '#size' => 22,
-    //'#theme_wrappers' => array('cropit_field_widget'),
-    //'#theme' => 'cropit_field_widget',
     '#weight' => -10,
 
     '#value_callback' => 'cropit_file_value',
+    //'#is_popup' => 'HIYA',
     // Allows this field to return an array instead of a single value.
     '#extended' => TRUE,
     '#process' => array_merge($element_info['#process'], array('cropit_field_widget_process')),
     
   );
-
-  //$element['#attributes']['class'][] = 'cropit-image-input';
 
   if ($field['cardinality'] == 1) {
     // Set the default value.
@@ -276,6 +351,14 @@ function cropit_field_widget_settings_form($field, $instance) {
     '#description' => t('Height in pixels of the cropping area (and resulting image)'),
     '#weight' => 17,
   );
+  if(module_exists('colorbox_node')){
+    $form['use_popup'] = array(
+      '#title' => t('Show widget in colorbox popup'),
+      '#type' => 'checkbox',
+      '#default_value' => $settings['use_popup'],
+      '#weight' => 18,
+    );
+  }
 
   return $form;
 }
@@ -376,12 +459,18 @@ function cropit_field_widget_process($element, &$form_state, $form) {
 
   $element['fid']['#attributes']['class'] = array('cropit-fid');
 
+  //drupal_set_message('form_state proc ' . print_r($form_state,true));
+
+  
   $item = $element['#value'];
   $item['fid'] = $element['fid']['#value'];
 
   $field = field_widget_field($element, $form_state);
   $instance = field_widget_instance($element, $form_state);
   $settings = $instance['widget']['settings'];
+
+  $element['#is_popup'] = isset($form_state['#is_popup']) && $form_state['#is_popup'] == 1 ? 1 : 0;
+  $element['#has_popup'] = $settings['use_popup'];
 
   $element['#theme'] = 'cropit_field_widget';
 
@@ -437,12 +526,10 @@ function cropit_field_widget_process($element, &$form_state, $form) {
     $element[$key]['#limit_validation_errors'] = array(array_slice($element['#parents'], 0, -1));
   }
 
-  $widget_settings['preview_image_style'] = 'thumbnail';
-
   // Add the image preview.
-  if ($element['#file'] && $widget_settings['preview_image_style']) {
+  if ($element['#file'] && $settings['preview_image_style']) {
     $variables = array(
-      'style_name' => $widget_settings['preview_image_style'],
+      'style_name' => $settings['preview_image_style'],
       'path' => $element['#file']->uri,
     );
 
@@ -470,14 +557,14 @@ function cropit_field_widget_process($element, &$form_state, $form) {
 
     // Store the dimensions in the form so the file doesn't have to be accessed
     // again. This is important for remote files.
-    $element['width'] = array(
+    /*$element['width'] = array(
       '#type' => 'hidden',
       '#value' => $variables['width'],
     );
     $element['height'] = array(
       '#type' => 'hidden',
       '#value' => $variables['height'],
-    );
+    );*/
   }  
 
   return $element;
@@ -505,14 +592,47 @@ function cropit_theme() {
 
 function theme_cropit_field_widget($variables) {
 
-  $element = $variables['element'];
-  $output = '';
-  $output .= '<div class="image-widget form-managed-file clearfix">';
+  $is_popup = $variables['element']['#is_popup'];
+  $has_popup = !$is_popup && $variables['element']['#has_popup'];
 
-  if (isset($element['preview'])) {
-    $output .= '<div class="image-preview">';
-    $output .= drupal_render($element['preview']);
-    $output .= '</div>';
+
+
+  $element = $variables['element'];
+  $entity_type = $element['#entity_type'];
+  $entity = $element['#entity'];
+  $field_name = $element['#field_name'];
+
+  switch($entity_type){
+    case 'node':
+      $entity_id = $entity->nid;
+      break;
+    case 'user': 
+      $entity_id = $entity->uid;
+      break;
+  }
+
+
+  $output = '';
+
+  $preview = isset($element['preview']) ? '<div class="image-preview">' . drupal_render($element['preview']) . '</div>' : '';
+
+  if($has_popup){
+    $output .= $preview;
+    $output .= drupal_render($element['fid']);
+    $path = 'cropit/popup/' . $entity_type . '/' . $entity_id . '/' . $field_name;
+    return $output . l('Add image',$path,array(
+      'query' => array('width' => 1040, 'height' => 600),
+      'attributes' => array('class' => array('colorbox-node'))));// . print_r($element,true);
+  }
+
+  $class = variable_get('cropit_replace_upload_button',0) ? ' button-replaced' : '';
+
+  $output .= '
+  <div class="cropit-container image-widget form-managed-file clearfix' . $class . '">
+    <div class="step-1"><p>' . variable_get('cropit_step1_title','') . '</p>';
+
+  if(!$is_popup){
+    $output .= $preview;
   }
 
   $output .= '<div class="image-widget-data">';
@@ -521,20 +641,49 @@ function theme_cropit_field_widget($variables) {
   }
 
   $output .= drupal_render_children($element);
+  
   $output .= '</div>';
 
-  $output .= '<div class="cropit-saved-image"></div><div class="cropit-cropper-container"><div class="cropit-image-preview"></div>'
-  . '<div class="image-size-label">'
-  . '  Resize image'
-  . '</div>'
-  . '<input type="range" class="cropit-image-zoom-input">'
-  . '<input type="hidden" name="image-data" class="hidden-image-data" />'
-  . '<div class="cropit-save"><input type="button" class="cropit-save-btn" value="Save" /></div></div>';
+  if(variable_get('cropit_replace_upload_button',0)){
 
+    $button_text = variable_get('cropit_upload_button_text','Choose a file');
 
+    $button_class = variable_get('cropit_upload_button_class','');
 
+    $output .= '<div class="cropit-fake-button ' . $button_class . '">' . $button_text . '</div>';
+
+  }
 
   $output .= '</div>';
+
+  $output .= '
+  <div class="step-2">
+    <p>' . variable_get('cropit_step2_title','') . '</p>
+    <div class="cropit-cropper-container">
+      <div class="cropit-image-preview"></div>
+      <div class="image-size-label">
+        Resize image
+      </div>
+      <input type="range" class="cropit-image-zoom-input">
+      <input type="hidden" name="image-data" class="hidden-image-data" />
+      <div class="cropit-save">
+        <input type="button" class="cropit-cancel-btn btn" value="Cancel" /><input type="button" class="cropit-apply-btn btn" value="Apply" />
+      </div>
+    </div>
+  </div>
+  <div class="step-3">
+    <p>' . variable_get('cropit_step3_title','') . '</p>
+    <div class="cropit-cropped-image-preview"><img /></div>
+    <input type="button" class="btn cropit-cancel-btn" value="Cancel" />
+    <input type="button" class="btn cropit-edit-btn" value="Edit" />
+    <input type="button" class="btn cropit-save-btn" value="Save" />
+  </div>
+  </div>';
+
+
+
+
+  //$output .= '</div>';
 
   return $output;
 

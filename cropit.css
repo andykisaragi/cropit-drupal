@@ -1,3 +1,13 @@
+      .button-replaced .cropit-image-input{
+        width: 0;
+        height: 0;
+        opacity: 0;
+      }
+
+      .cropit-fake-button{
+        cursor: pointer;
+      }
+
       .cropit-saved-image{
         width: 250px;
         height: 250px;
@@ -14,7 +24,6 @@
         height: 250px;*/
         cursor: move;
       }
-
 
       .cropit-image-background {
         opacity: .2;
