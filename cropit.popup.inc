@@ -9,12 +9,15 @@
  * @see yw_user_settings_banner_form_validate()
  * @see yw_user_settings_banner_form_submit()
  */
-function cropit_popup_form($form, &$form_state, $entity_type, $entity_id, $field, $selector) {
+function cropit_popup_form($form, &$form_state, $entity_type, $entity_id, $field) {
   
-
-  $entity = entity_load($entity_type,array($entity_id));
-
-  $entity = array_pop($entity);
+  if(is_numeric($entity_id)){
+    $entity = entity_load($entity_type,array($entity_id));
+    $entity = array_pop($entity);
+  }else{
+    $entity = new stdClass();
+    $entity->type = $entity_id;
+  }
 
   //drupal_set_message(print_r($entity,true));
 
@@ -28,31 +31,22 @@ function cropit_popup_form($form, &$form_state, $entity_type, $entity_id, $field
       }
     }
   }
-
-  /*global $user;
   
-  // During initial form build, add the entity to the form state for use during
-  // form building and processing. During a rebuild, use what is in the form
-  // state.
-  if (!isset($form_state['user'])) {
-    $form_state['user'] = $account;
-  }
-  else {
-    $account = $form_state['user'];
-  }*/
-  
-  $form['title']['#markup'] = '<h1>Add an image</h1>';
-   
-  //$form['field_image_help']['#markup'] = "<p>This is your current background image.</p><p>If you'd like to change it please choose a new image below. This image will be shown across the top of your public profile page.</p>";
-  
+  $form['title']['#markup'] = '<h2>Add an image</h2>';
 
   $form['#is_popup'] = 1;
-
   $form_state['#is_popup'] = 1;
 
   // Attach field widgets.
   field_attach_form($entity_type, $entity, $form, $form_state, NULL, array('field_name' => $field));
   
+  $form[$field]['#title'] = '';
+
+  $form['field_name'] = array(
+    '#type' => 'hidden',
+    '#value' => str_replace('_','-',$field),
+    );
+
   // Hide unwanted fieldsets/fields
   $form['redirect']['#access'] = FALSE;
   $form['#metatags']['#access'] = FALSE;
@@ -69,25 +63,4 @@ function cropit_popup_form($form, &$form_state, $entity_type, $entity_id, $field
   return $form;
 }
 
-/**
- * Submit function for the user account and profile editing form.
- */
-function yw_user_settings_banner_form_submit($form, &$form_state) {
-  
-  // https://api.drupal.org/api/drupal/modules!field!field.attach.inc/function/field_attach_form/7
-  // http://stackoverflow.com/questions/18794648/custom-submit-handler-for-two-combined-forms-workflow-and-node-edit-forms
-  
-  // Clear the page cache because pages can contain usernames and/or profile information:
-  // cache_clear_all();
-  
-  // Load the user object, modify it, and save it.
-  $uid = arg(1);
-  $user = user_load($uid);
-  $user->field_image[LANGUAGE_NONE][0] = $form_state['values']['field_image'][LANGUAGE_NONE][0];
-  user_save($user);
 
-  //$form_state['rebuild'] = TRUE;
-  $form_state['redirect'] = 'user/' . $uid;
-
-  drupal_set_message(t('The changes have been saved.'));
-}

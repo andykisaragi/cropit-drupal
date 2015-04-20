@@ -10,7 +10,7 @@
   @todo default global path?
   @todo default crop dimensions 
   @todo tidy image preview, make workflow clearer (must 'save' to add image)
-  @todo update image preview on save
+  @todo image preview using selected style for widget
 
 */
 
@@ -70,6 +70,39 @@ function cropit_menu(){
 
 function cropit_admin_form($form, &$form_state){
 
+  $fields = array(
+    'node' => array(
+      'post' => array('field_image' => array('label' => 'Large banner for your Post')),
+      'event' => array('field_image' => array('label' => 'Large banner for your Event')),
+      'resource' => array('field_image' => array('label' => 'Large banner for your Resource')),
+      'group' => array('field_group_banner' => array('label' => 'Large banner for your Group'),
+                        'field_group_logo' => array('label' => 'Logo or Badge for your Group'),
+                        ),
+    ),
+
+
+  );
+
+  foreach($fields as $entity_type => $bundles){
+    foreach($bundles as $bundle => $bundle_fields){
+      foreach($bundle_fields as $field_name => $field_deets){
+        $instance = field_read_instance($entity_type, $field_name, $bundle);
+        $instance['label'] = $field_deets['label'];
+
+        if($field_name == 'field_group_logo'){
+          $instance['widget']['settings']['crop_width'] = 132;
+          $instance['widget']['settings']['crop_height'] = 132;
+        }
+        field_update_instance($instance);
+      }
+    }
+  }
+
+
+
+
+
+
 
 
   /*$form['cropit_js_location'] = array(
@@ -82,7 +115,6 @@ function cropit_admin_form($form, &$form_state){
   );*/
 
   $form['cropit_step1_title'] = array(
-
     '#type' => 'textfield',
     '#title' => 'Step 1 title',
     '#default_value' => variable_get('cropit_step1_title','Step 1/3 - Choose your image'),
@@ -94,10 +126,19 @@ function cropit_admin_form($form, &$form_state){
     '#default_value' => variable_get('cropit_step2_title','Step 2/3 - Resize and crop your image'),
     );
   $form['cropit_step3_title'] = array(
-
     '#type' => 'textfield',
     '#title' => 'Step 3 title',
     '#default_value' => variable_get('cropit_step3_title','Step 3/3 - Approve your image'),
+    );
+  $form['cropit_default_width'] = array(
+    '#type' => 'textfield',
+    '#title' => 'Default crop width (pixels)',
+    '#default_value' => variable_get('cropit_default_width',300),
+    );
+  $form['cropit_default_height'] = array(
+    '#type' => 'textfield',
+    '#title' => 'Default crop height (pixels)',
+    '#default_value' => variable_get('cropit_default_height',150),
     );
 
   $form['cropit_replace_upload_button'] = array(
@@ -120,10 +161,38 @@ function cropit_admin_form($form, &$form_state){
   $form['cropit_upload_button_class'] = array(
 
     '#type' => 'textfield',
-    '#title' => 'Upload button classes',
+    '#title' => 'Upload / save / etc button classes',
     '#default_value' => variable_get('cropit_upload_button_class',''),
 
   );
+  $form['cropit_cancel_button_class'] = array(
+
+    '#type' => 'textfield',
+    '#title' => 'Cancel button classes',
+    '#default_value' => variable_get('cropit_cancel_button_class',''),
+
+  );
+
+  $form['popup'] = array(
+    '#type' => 'fieldset',
+    '#title' => 'Popup settings',
+  );
+
+  $form['popup']['cropit_popup_button_class'] = array(
+    '#type' => 'textfield',
+    '#title' => 'Popup launcher button class',
+    '#default_value' => variable_get('cropit_popup_button_class','btn'),
+    );
+  $form['popup']['cropit_add_image_link_text'] = array(
+    '#type' => 'textfield',
+    '#title' => 'Add image link text',
+    '#default_value' => variable_get('cropit_add_image_link_text','Add image'),
+    );
+  $form['popup']['cropit_change_image_link_text'] = array(
+    '#type' => 'textfield',
+    '#title' => 'Change image link text',
+    '#default_value' => variable_get('cropit_change_image_link_text','Change image'),
+    );
 
   return system_settings_form($form);
 
@@ -193,11 +262,10 @@ function cropit_save_file_from_datauri(){
 function cropit_preview_image($fid){
 
   if(!is_numeric($fid)) die();
-
   $file = file_load($fid);
 
-  print(file_create_url($file->uri));
-
+  //@todo use widget image style
+  print(image_style_url('thumbnail',$file->uri));
   die();
 
 }
@@ -216,8 +284,8 @@ function cropit_field_widget_info() {
       'field types' => array('image'),
       'settings' => array(
         'preview_image_style' => 'thumbnail',
-        'crop_width' => '300',
-        'crop_height' => '150',
+        'crop_width' => variable_get('cropit_default_width',300),
+        'crop_height' => variable_get('cropit_default_height',200),
         ),
       'behaviors' => array(
         'multiple values' => FIELD_BEHAVIOR_DEFAULT,
@@ -229,6 +297,14 @@ function cropit_field_widget_info() {
 
 function cropit_field_widget_form(&$form, &$form_state, $field, $instance, $langcode, $items, $delta, $element) {
 
+  if(strpos($_SERVER['HTTP_USER_AGENT'],'MSIE 8') !== false 
+    || strpos($_SERVER['HTTP_USER_AGENT'],'MSIE 9') !== false
+    || strpos($_SERVER['HTTP_USER_AGENT'],'MSIE 7') !== false
+    || strpos($_SERVER['HTTP_USER_AGENT'],'MSIE 6') !== false){
+    // if old ie, use core image widget
+    $elements = image_field_widget_form($form, $form_state, $field, $instance, $langcode, $items, $delta, $element);
+    return $elements[0];
+  }
   //drupal_set_message(print_r(array_keys($form),true));
 
   drupal_add_js(array('cropit' => array(
@@ -239,7 +315,7 @@ function cropit_field_widget_form(&$form, &$form_state, $field, $instance, $lang
 
 
 
-  drupal_add_js('/sites/all/libraries/cropit/dist/jquery.cropit.min.js');
+  drupal_add_js('/sites/all/libraries/cropit/dist/jquery.cropit.js');
   drupal_add_css(drupal_get_path('module','cropit') . '/cropit.css');
   drupal_add_js(drupal_get_path('module','cropit') . '/cropit.js'); 
   
@@ -256,7 +332,7 @@ function cropit_field_widget_form(&$form, &$form_state, $field, $instance, $lang
     '#type' => 'file',
     '#size' => 22,
     '#weight' => -10,
-
+    '#progress_message' => '',
     '#value_callback' => 'cropit_file_value',
     //'#is_popup' => 'HIYA',
     // Allows this field to return an array instead of a single value.
@@ -272,7 +348,7 @@ function cropit_field_widget_form(&$form, &$form_state, $field, $instance, $lang
     if (empty($element['#default_value']['fid'])) {
       $element['#description'] = theme('file_upload_help', array(
         'description' => $element['#description'], 
-        'upload_validators' => $element['#upload_validators']
+        //'upload_validators' => $element['#upload_validators']
       ));
     }
     $elements = array($element);
@@ -358,6 +434,24 @@ function cropit_field_widget_settings_form($field, $instance) {
       '#default_value' => $settings['use_popup'],
       '#weight' => 18,
     );
+
+
+    /*
+    $form['show_description_in_popup'] = array(
+      '#title' => t('Show field description in popup'),
+      '#type' => 'checkbox',
+      '#default_value' => $settings['show_description_in_popup'],
+      '#weight' => 18,
+    );
+    $form['show_title_in_popup'] = array(
+      '#title' => t('Show field title in popup'),
+      '#type' => 'checkbox',
+      '#default_value' => $settings['show_title_in_popup'],
+      '#weight' => 18,
+    );
+
+
+    */
   }
 
   return $form;
@@ -448,9 +542,7 @@ function cropit_file_value(&$element, $input = FALSE, $form_state = NULL) {
 }
 
 /**
- * An element #process callback for the file_generic field type.
  *
- * Expands the file_generic type to include the description and display fields.
  */
 function cropit_field_widget_process($element, &$form_state, $form) {
 
@@ -470,7 +562,7 @@ function cropit_field_widget_process($element, &$form_state, $form) {
   $settings = $instance['widget']['settings'];
 
   $element['#is_popup'] = isset($form_state['#is_popup']) && $form_state['#is_popup'] == 1 ? 1 : 0;
-  $element['#has_popup'] = $settings['use_popup'];
+  $element['#has_popup'] = isset($settings['use_popup']) ? $settings['use_popup'] : 0;
 
   $element['#theme'] = 'cropit_field_widget';
 
@@ -602,9 +694,11 @@ function theme_cropit_field_widget($variables) {
   $entity = $element['#entity'];
   $field_name = $element['#field_name'];
 
+  //drupal_set_message(print_r($entity,true));
+
   switch($entity_type){
     case 'node':
-      $entity_id = $entity->nid;
+      $entity_id = isset($entity->nid) ? $entity->nid : $entity->type;
       break;
     case 'user': 
       $entity_id = $entity->uid;
@@ -614,22 +708,26 @@ function theme_cropit_field_widget($variables) {
 
   $output = '';
 
-  $preview = isset($element['preview']) ? '<div class="image-preview">' . drupal_render($element['preview']) . '</div>' : '';
+  $preview_img = isset($element['preview']) ? drupal_render($element['preview']) : null;
+  $preview = '<div class="image-preview">' . $preview_img . '</div>';
 
   if($has_popup){
     $output .= $preview;
     $output .= drupal_render($element['fid']);
     $path = 'cropit/popup/' . $entity_type . '/' . $entity_id . '/' . $field_name;
-    return $output . l('Add image',$path,array(
+    $add_link_text = variable_get('cropit_add_image_link_text','Add image');
+    $change_link_text = variable_get('cropit_change_image_link_text','Change image');
+    $link_text = $preview_img ? $change_link_text : $add_link_text;
+    return $output . l($link_text,$path,array(
       'query' => array('width' => 1040, 'height' => 600),
-      'attributes' => array('class' => array('colorbox-node'))));// . print_r($element,true);
+      'attributes' => array('class' => array('colorbox-node',variable_get('cropit_popup_button_class','btn')))));// . print_r($element,true);
   }
 
   $class = variable_get('cropit_replace_upload_button',0) ? ' button-replaced' : '';
 
   $output .= '
   <div class="cropit-container image-widget form-managed-file clearfix' . $class . '">
-    <div class="step-1"><p>' . variable_get('cropit_step1_title','') . '</p>';
+    <div class="step-1"><p class="step-label">' . variable_get('cropit_step1_title','') . '</p>';
 
   if(!$is_popup){
     $output .= $preview;
@@ -641,16 +739,19 @@ function theme_cropit_field_widget($variables) {
   }
 
   $output .= drupal_render_children($element);
-  
+   
   $output .= '</div>';
+
+  $button_class = variable_get('cropit_upload_button_class','');
+
+  $cancel_button_class = variable_get('cropit_cancel_button_class','');
 
   if(variable_get('cropit_replace_upload_button',0)){
 
     $button_text = variable_get('cropit_upload_button_text','Choose a file');
 
-    $button_class = variable_get('cropit_upload_button_class','');
 
-    $output .= '<div class="cropit-fake-button ' . $button_class . '">' . $button_text . '</div>';
+    $output .= '<div class="cropit-fake-button upload-button ' . $button_class . '">' . $button_text . '</div>';
 
   }
 
@@ -658,25 +759,28 @@ function theme_cropit_field_widget($variables) {
 
   $output .= '
   <div class="step-2">
-    <p>' . variable_get('cropit_step2_title','') . '</p>
+    <p class="step-label">' . variable_get('cropit_step2_title','') . '</p>
     <div class="cropit-cropper-container">
-      <div class="cropit-image-preview"></div>
+      <div class="cropit-image-preview-container"><div class="cropit-image-preview"></div></div>
       <div class="image-size-label">
         Resize image
       </div>
-      <input type="range" class="cropit-image-zoom-input">
+      <div class="image-size-slider"><input type="range" class="cropit-image-zoom-input"></div>
       <input type="hidden" name="image-data" class="hidden-image-data" />
       <div class="cropit-save">
-        <input type="button" class="cropit-cancel-btn btn" value="Cancel" /><input type="button" class="cropit-apply-btn btn" value="Apply" />
+        <input type="button" class="cropit-cancel-btn ' . $cancel_button_class . '" value="Cancel" /><input type="button" class="cropit-apply-btn ' . $button_class . '" value="Apply" />
       </div>
     </div>
   </div>
   <div class="step-3">
-    <p>' . variable_get('cropit_step3_title','') . '</p>
+    <p class="step-label">' . variable_get('cropit_step3_title','') . '</p>
     <div class="cropit-cropped-image-preview"><img /></div>
-    <input type="button" class="btn cropit-cancel-btn" value="Cancel" />
-    <input type="button" class="btn cropit-edit-btn" value="Edit" />
-    <input type="button" class="btn cropit-save-btn" value="Save" />
+    <input type="button" class="cropit-cancel-btn ' . $cancel_button_class . '" value="Cancel" />
+    <input type="button" class="cropit-edit-btn btn-blue ' . $button_class . '" value="Edit" />
+    <input type="button" class="cropit-save-btn btn-blue ' . $button_class . '" value="Save changes" />
+  </div>
+  <div class="step-4">
+    oh please won\'t you wait
   </div>
   </div>';
 

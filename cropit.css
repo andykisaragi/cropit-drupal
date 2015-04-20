@@ -3,6 +3,14 @@
         height: 0;
         opacity: 0;
       }
+      html.ie .button-replaced .cropit-image-input{
+        width: auto;
+        height: auto;
+        opacity: 1;
+      }
+      html.ie .cropit-fake-button{
+        display: none;
+      }
 
       .cropit-fake-button{
         cursor: pointer;
@@ -17,17 +25,16 @@
       .cropit-image-preview {
         background-color: #f8f8f8;
         background-size: cover;
-        border: 1px solid #ccc;
         border-radius: 3px;
-        margin-top: 7px;
-        /*width: 250px;
-        height: 250px;*/
         cursor: move;
       }
 
-      .cropit-image-background {
+
+
+      img.cropit-image-background {
         opacity: .2;
         cursor: auto;
+        max-width: none;
       }
 
       .image-size-label {
