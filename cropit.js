@@ -24,12 +24,22 @@
       //$('.cropit-container').cropit();
       var width = Drupal.settings.cropit.width;
       var height = Drupal.settings.cropit.height;
+      var nid = Drupal.settings.cropit.nid;
+      var uid = Drupal.settings.cropit.uid;
+      var entity_id = Drupal.settings.cropit.entity_id;
+      var entity_type = Drupal.settings.cropit.entity_type;
+      var field = Drupal.settings.cropit.field;
+      var refresh = Drupal.settings.cropit.refresh;
       var preview_style = Drupal.settings.cropit.preview_style;
       var add_image_link_text = Drupal.settings.cropit.add_image_link_text;
       var change_image_link_text = Drupal.settings.cropit.change_image_link_text;
+
+
       $('.cropit-container').cropit('previewSize', { width: width, height: height });
       //$('.cropit-image-preview-container').width(width);
       
+      console.log('field: ' + field + ' / entity_id: ' + entity_id + ' / entity_type: ' + entity_type + ' / refresh: ' + refresh);
+
       $('.cropit-container .step-2,.cropit-container .step-3,.cropit-container .step-4').hide();
 
 
@@ -102,7 +112,7 @@
         parentForm.find('.cropit-container .step-3').slideUp();
         parentForm.find('.cropit-container .step-4').slideDown();
 
-        $.post( "/cropit/save_image", { data_uri: exported, filename: filename, save_managed: 1} ).done(function( fid ) {
+        $.post( "/cropit/save_image", { data_uri: exported, filename: filename, save_managed: 1, save_content: refresh, entity_id: entity_id, field: field, entity_type: entity_type} ).done(function( fid ) {
           //console.log(fid);
 
           parentForm.find('.cropit-fid').val(fid);
@@ -112,8 +122,11 @@
             //alert(url);
             parentField.find('.image-preview').html('<img src="' + url + '" />');
             parentField.find('.launch-popup').html(change_image_link_text);
-            if($('.cropit-popup-form').length){
+            if(refresh){
+              location.reload();
+            }else if($('.cropit-popup-form').length){
               $('#cboxClose').click();
+
             }else{
 
               //parentForm.find('.cropit-container .step-4').slideUp();

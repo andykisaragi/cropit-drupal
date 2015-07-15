@@ -21,6 +21,8 @@ function cropit_popup_form($form, &$form_state, $entity_type, $entity_id, $field
 
   //drupal_set_message(print_r($entity,true));
 
+  // @todo: get forms for any entity type
+
   if($entity_type == 'node'){
     module_load_include('inc', 'node', 'node.pages');
     $form_func = $entity->type . '_node_form';
@@ -62,5 +64,3 @@ function cropit_popup_form($form, &$form_state, $entity_type, $entity_id, $field
 
   return $form;
 }
-
-

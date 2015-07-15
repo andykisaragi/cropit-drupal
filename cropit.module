@@ -181,6 +181,13 @@ function cropit_save_file_from_datauri(){
   // could make the var name a hash of time perhaps?
   // hm but it would be visible in the js
   $encodedData = $_POST['data_uri'];
+  $filename = $_POST['filename'];
+  $entity_id = $_POST['entity_id'];
+  $entity_type = $_POST['entity_type'];
+  $field = $_POST['field'];
+  $save_content = $_POST['save_content'] && $_POST['save_content'] != 'null' ? true : false;
+
+  error_log($entity_type . ' ' . $entity_id);
 
   $encodedData = substr($encodedData,strpos($encodedData,",")+1);
 
@@ -188,8 +195,6 @@ function cropit_save_file_from_datauri(){
   $decodedData = base64_decode($encodedData);
 
   $files_path = file_directory_temp();
-
-  $filename = $_POST['filename'];
 
   // @todo - paths in field settings?
   // @todo - global path in module settings?
@@ -205,6 +210,16 @@ function cropit_save_file_from_datauri(){
       $file = file_save_data($handle, 'public://' . $filename);
       fclose($handle);
       if($file){
+        if($save_content){
+          if($entity_id){
+
+            $entity = entity_load_single($entity_type,$entity_id);
+            $entity->{$field}[LANGUAGE_NONE][0]['fid'] = $file->fid;
+            entity_save($entity_type, $entity);
+
+          }
+        }
+
         print $file->fid;
         die();
       }
@@ -260,6 +275,10 @@ function cropit_field_widget_info() {
 
 function cropit_field_widget_form(&$form, &$form_state, $field, $instance, $langcode, $items, $delta, $element) {
 
+  //drupal_set_message(print_r(($instance),true));
+  //drupal_set_message(print_r($form['#entity'],true));
+
+
   if(strpos($_SERVER['HTTP_USER_AGENT'],'MSIE 8') !== false 
     || strpos($_SERVER['HTTP_USER_AGENT'],'MSIE 9') !== false
     || strpos($_SERVER['HTTP_USER_AGENT'],'MSIE 7') !== false
@@ -268,9 +287,38 @@ function cropit_field_widget_form(&$form, &$form_state, $field, $instance, $lang
     $elements = image_field_widget_form($form, $form_state, $field, $instance, $langcode, $items, $delta, $element);
     return $elements[0];
   }
-  //drupal_set_message(print_r(array_keys($form),true));
+  
+  switch($instance['entity_type']){
+
+    case 'node':
+
+      $entity_id = $form['#node']->nid ? $form['#node']->nid : 0;
+      
+      break;
+
+    case 'user':
+
+      $entity_id = $form['#user']->uid ? $form['#user']->uid : 0;
+      
+      break;
+
+    case 'taxonomy_term':
+
+      $entity_id = $form['#taxonomy_term']->tid ? $form['#taxonomy_term']->tid : 0;
+      
+      break;
+
+    default: 
+
+      $entity_id = 0;
+
+  }  
 
   drupal_add_js(array('cropit' => array(
+    'entity_id' => $entity_id,
+    'entity_type' => $instance['entity_type'],
+    'refresh' => $_GET['refresh'],
+    'field' => $field['field_name'],
     'width' => $instance['widget']['settings']['crop_width'],
     'height' => $instance['widget']['settings']['crop_height'],
     'preview_style' => $instance['widget']['settings']['preview_image_style'],
@@ -281,7 +329,7 @@ function cropit_field_widget_form(&$form, &$form_state, $field, $instance, $lang
 
 
 
-  drupal_add_js('/sites/all/libraries/cropit/dist/jquery.cropit.js');
+  drupal_add_js('sites/all/libraries/cropit/dist/jquery.cropit.js');
   drupal_add_css(drupal_get_path('module','cropit') . '/cropit.css');
   drupal_add_js(drupal_get_path('module','cropit') . '/cropit.js'); 
   
@@ -668,6 +716,9 @@ function theme_cropit_field_widget($variables) {
       break;
     case 'user': 
       $entity_id = $entity->uid;
+      break;
+    case 'taxonomy_term': 
+      $entity_id = $entity->tid;
       break;
   }
 
